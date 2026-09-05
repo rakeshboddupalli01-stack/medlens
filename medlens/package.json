@@ -1,0 +1,19 @@
+{
+  "name": "medlens",
+  "version": "1.0.0",
+  "description": "MedLens - AI-Powered Clinical Information Intelligence & Reference-Range Engine",
+  "main": "index.html",
+  "scripts": {
+    "start": "powershell -ExecutionPolicy Bypass -File ./server.ps1 -Port 8085",
+    "build": "echo 'MedLens static application ready for deployment.'"
+  },
+  "keywords": [
+    "clinical-intelligence",
+    "medical-ocr",
+    "laboratory-reports",
+    "reference-ranges",
+    "patient-timeline"
+  ],
+  "author": "MedLens Team",
+  "license": "MIT"
+}
