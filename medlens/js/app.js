@@ -23,35 +23,35 @@ window.MedLensApp = {
     // Theme toggle
     const themeBtn = document.getElementById("btn-toggle-theme");
     if (themeBtn) {
-      themeBtn.addEventListener("click", () => {
+      themeBtn.onclick = () => {
         const body = document.body;
         const current = body.getAttribute("data-theme") || "dark";
         const next = current === "dark" ? "light" : "dark";
         body.setAttribute("data-theme", next);
         themeBtn.textContent = next === "dark" ? "☀️ Light Mode" : "🌙 Dark Mode";
-      });
+      };
     }
 
     // New patient button
     const newPatBtn = document.getElementById("btn-new-patient");
     if (newPatBtn) {
-      newPatBtn.addEventListener("click", () => {
+      newPatBtn.onclick = () => {
         const name = prompt("Enter new patient full name:", "Jane Doe");
-        if (name) {
-          window.MedLensState.createPatient(name, {});
+        if (name && name.trim()) {
+          window.MedLensState.createPatient(name.trim(), {});
           window.MedLensState.setActiveTab("intake");
         }
-      });
+      };
     }
 
     // Reset data button
     const resetBtn = document.getElementById("btn-reset-data");
     if (resetBtn) {
-      resetBtn.addEventListener("click", () => {
+      resetBtn.onclick = () => {
         if (confirm("Reset MedLens state to default pre-loaded sample patient records?")) {
           window.MedLensState.resetToSampleData();
         }
-      });
+      };
     }
   },
 
@@ -60,7 +60,7 @@ window.MedLensApp = {
     if (!patSelect) return;
 
     patSelect.innerHTML = "";
-    window.MedLensState.patients.forEach(pat => {
+    (window.MedLensState.patients || []).forEach(pat => {
       const opt = document.createElement("option");
       opt.value = pat.id;
       opt.textContent = `${pat.name} (${pat.patient_info?.age?.value || 'N/A'}y/o ${pat.patient_info?.sex?.value || ''})`;
@@ -135,7 +135,7 @@ window.MedLensApp = {
 
   /* ---------------- DASHBOARD VIEW ---------------- */
   renderDashboardView: function(container, pat) {
-    const merged = window.MedLensState.getMergedRecord();
+    const merged = window.MedLensState.getMergedRecord() || {};
     const reports = pat.reports || [];
     const latestRep = reports[reports.length - 1];
 
@@ -169,14 +169,14 @@ window.MedLensApp = {
           <div style="margin-top:1rem; border-top:1px solid var(--border-color); padding-top:0.75rem;">
             <div style="font-size:0.8rem; font-weight:600; color:var(--text-muted);">ACTIVE CONDITIONS</div>
             <div style="display:flex; flex-wrap:wrap; gap:0.4rem; margin-top:0.4rem;">
-              ${(pat.patient_info?.conditions || []).map(c => `<span class="badge badge-unknown">${c.name} (${c.diagnosed_year || 'History'})</span>`).join('') || '<span style="font-size:0.8rem; color:var(--text-muted)">None listed</span>'}
+              ${(pat.patient_info?.conditions || []).map(c => `<span class="badge badge-unknown">${typeof c === 'string' ? c : c.name} (${c.diagnosed_year || 'History'})</span>`).join('') || '<span style="font-size:0.8rem; color:var(--text-muted)">None listed</span>'}
             </div>
           </div>
 
           <div style="margin-top:0.75rem;">
             <div style="font-size:0.8rem; font-weight:600; color:var(--text-muted);">KNOWN ALLERGIES</div>
             <div style="display:flex; flex-wrap:wrap; gap:0.4rem; margin-top:0.4rem;">
-              ${(pat.patient_info?.allergies || []).map(a => `<span class="badge badge-high">${a.substance}: ${a.reaction}</span>`).join('') || '<span style="font-size:0.8rem; color:var(--text-muted)">No known allergies</span>'}
+              ${(pat.patient_info?.allergies || []).map(a => `<span class="badge badge-high">${typeof a === 'string' ? a : a.substance + ': ' + (a.reaction || 'Reported')}</span>`).join('') || '<span style="font-size:0.8rem; color:var(--text-muted)">No known allergies</span>'}
             </div>
           </div>
         </div>
@@ -250,7 +250,7 @@ window.MedLensApp = {
                   <td><strong>${t.test_name}</strong></td>
                   <td>${t.value} ${t.unit}</td>
                   <td><code>${t.reference_range ? t.reference_range.text : 'None Printed (null)'}</code></td>
-                  <td><span class="badge badge-${t.interpretation}">${t.interpretation.toUpperCase()}</span></td>
+                  <td><span class="badge badge-${t.interpretation || 'unknown'}">${(t.interpretation || 'unknown').toUpperCase()}</span></td>
                   <td><span class="badge badge-ai-extracted">Page ${t.source?.page || 1}: ${t.source?.section || 'Lab'}</span></td>
                 </tr>
               `).join('') || '<tr><td colspan="5">No reports processed yet. Upload a lab report in OCR Processing view.</td></tr>'}
@@ -264,6 +264,11 @@ window.MedLensApp = {
   /* ---------------- INTAKE FORM VIEW ---------------- */
   renderIntakeView: function(container, pat) {
     const info = pat.patient_info || {};
+
+    const formatArray = (arr, key) => {
+      if (!Array.isArray(arr)) return "";
+      return arr.map(item => typeof item === 'string' ? item : (item[key] || item.text || item.name || item.substance || String(item))).join(', ');
+    };
 
     container.innerHTML = `
       <div class="card" style="margin-bottom:1.5rem;">
@@ -304,22 +309,22 @@ window.MedLensApp = {
 
           <div class="form-group">
             <label>Current Symptoms (comma separated)</label>
-            <textarea class="form-control" name="symptoms" rows="2">${(info.symptoms || []).map(s => s.text).join(', ')}</textarea>
+            <textarea class="form-control" name="symptoms" rows="2">${formatArray(info.symptoms, 'text')}</textarea>
           </div>
 
           <div class="form-group">
             <label>Existing Medical Conditions (comma separated)</label>
-            <textarea class="form-control" name="conditions" rows="2">${(info.conditions || []).map(c => c.name).join(', ')}</textarea>
+            <textarea class="form-control" name="conditions" rows="2">${formatArray(info.conditions, 'name')}</textarea>
           </div>
 
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
             <div class="form-group">
               <label>Known Allergies (comma separated)</label>
-              <input type="text" class="form-control" name="allergies" value="${(info.allergies || []).map(a => a.substance).join(', ')}">
+              <input type="text" class="form-control" name="allergies" value="${formatArray(info.allergies, 'substance')}">
             </div>
             <div class="form-group">
-              <label>Current Medications & Dosages</label>
-              <input type="text" class="form-control" name="medications" value="${(info.medications || []).map(m => m.name).join(', ')}">
+              <label>Current Medications & Dosages (comma separated)</label>
+              <input type="text" class="form-control" name="medications" value="${formatArray(info.medications, 'name')}">
             </div>
           </div>
 
@@ -438,8 +443,8 @@ window.MedLensApp = {
                       <td><strong>${t.test_name}</strong></td>
                       <td>${t.value} ${t.unit}</td>
                       <td><code>${t.reference_range ? t.reference_range.text : 'null (None Printed)'}</code></td>
-                      <td><span class="badge badge-${t.interpretation}">${t.interpretation.toUpperCase()}</span></td>
-                      <td><span class="badge badge-user">${t.confidence.toUpperCase()}</span></td>
+                      <td><span class="badge badge-${t.interpretation || 'unknown'}">${(t.interpretation || 'unknown').toUpperCase()}</span></td>
+                      <td><span class="badge badge-user">${(t.confidence || 'high').toUpperCase()}</span></td>
                       <td>${t.flags?.length > 0 ? t.flags.map(f => `<span class="badge badge-high">${f}</span>`).join(' ') : 'None'}</td>
                     </tr>
                   `).join('')}
@@ -488,7 +493,7 @@ Vitamin B12            380 pg/mL None Printed UNKNOWN`;
 
   /* ---------------- STRUCTURED RECORD & TIMELINE VIEW ---------------- */
   renderStructuredRecordView: function(container, pat) {
-    const merged = window.MedLensState.getMergedRecord();
+    const merged = window.MedLensState.getMergedRecord() || {};
 
     container.innerHTML = `
       <div class="card" style="margin-bottom:1.5rem;">
@@ -650,7 +655,7 @@ Vitamin B12            380 pg/mL None Printed UNKNOWN`;
                     <div style="font-size:0.75rem; color:var(--text-muted);">SOURCE: <code>"${item.source_snippet}"</code></div>
                     <div style="font-size:0.9rem; font-weight:700; color:var(--accent-cyan); margin-top:0.2rem;">EXTRACTED: ${item.corrected_value != null ? item.corrected_value : item.extracted_value} ${item.unit}</div>
                   </td>
-                  <td><span class="badge badge-user">${item.confidence.toUpperCase()}</span></td>
+                  <td><span class="badge badge-user">${(item.confidence || 'high').toUpperCase()}</span></td>
                   <td>
                     ${item.human_action === 'accepted' ? '<span class="badge badge-normal">ACCEPTED</span>' : ''}
                     ${item.human_action === 'corrected' ? '<span class="badge badge-high">CORRECTED</span>' : ''}
@@ -665,7 +670,7 @@ Vitamin B12            380 pg/mL None Printed UNKNOWN`;
                     </div>
                   </td>
                 </tr>
-              `).join('') || '<tr><td colspan="5">No extracted tests available for review.</td></tr>'}
+              `).join('') || '<tr><td colspan="5">No extracted tests available for review. Upload a report in OCR Processing.</td></tr>'}
             </tbody>
           </table>
         </div>
@@ -679,18 +684,19 @@ Vitamin B12            380 pg/mL None Printed UNKNOWN`;
     if (!item) return;
 
     if (action === 'correct') {
-      const newVal = prompt(`Enter corrected value for ${item.field}:`, item.extracted_value);
-      if (newVal != null) {
-        window.MedLensVerificationEngine.applyAction(item, 'correct', { corrected_value: parseFloat(newVal), reason: "Manual clinician correction" });
+      const currentVal = item.corrected_value != null ? item.corrected_value : item.extracted_value;
+      const newVal = prompt(`Enter corrected value for ${item.field}:`, currentVal);
+      if (newVal != null && !isNaN(parseFloat(newVal))) {
+        window.MedLensState.applyVerificationAction(itemId, 'correct', { corrected_value: parseFloat(newVal), reason: "Manual clinician correction" });
         alert(`Field ${item.field} updated to ${newVal}. Audit log recorded.`);
         this.renderCurrentView();
       }
     } else if (action === 'accept') {
-      window.MedLensVerificationEngine.applyAction(item, 'accept');
+      window.MedLensState.applyVerificationAction(itemId, 'accept');
       alert(`Verified ${item.field} as correct.`);
       this.renderCurrentView();
     } else if (action === 'flag') {
-      window.MedLensVerificationEngine.applyAction(item, 'flag', { reason: "Requires second reviewer" });
+      window.MedLensState.applyVerificationAction(itemId, 'flag', { reason: "Requires second reviewer" });
       alert(`Flagged ${item.field} for review.`);
       this.renderCurrentView();
     }
@@ -755,7 +761,7 @@ Vitamin B12            380 pg/mL None Printed UNKNOWN`;
 
   /* ---------------- AI SUMMARY & SAFETY SCREENER VIEW ---------------- */
   renderSummaryView: function(container, pat) {
-    const summaryData = window.MedLensState.getSummaryData();
+    const summaryData = window.MedLensState.getSummaryData() || {};
     const audit = summaryData?.safety_audit || {};
 
     container.innerHTML = `

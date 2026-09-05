@@ -11,7 +11,12 @@ window.MedLensState = {
     const saved = localStorage.getItem("medlens_patients_v1");
     if (saved) {
       try {
-        this.patients = JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          this.patients = parsed;
+        } else {
+          this.patients = JSON.parse(JSON.stringify(window.MEDLENS_SAMPLE_DATA));
+        }
       } catch(e) {
         console.error("Failed to parse saved MedLens state, loading sample data", e);
         this.patients = JSON.parse(JSON.stringify(window.MEDLENS_SAMPLE_DATA));
@@ -43,7 +48,7 @@ window.MedLensState = {
   },
 
   getActivePatient: function() {
-    return this.patients.find(p => p.id === this.activePatientId);
+    return this.patients.find(p => p.id === this.activePatientId) || this.patients[0];
   },
 
   setActivePatient: function(patientId) {
@@ -87,6 +92,7 @@ window.MedLensState = {
     const extractedReport = window.MedLensReportParser.parseReport(reportText, fileName);
     extractedReport.id = "rep_" + Date.now();
     extractedReport.report_meta.patient_name = pat.name;
+    extractedReport.verification_items = window.MedLensVerificationEngine.initVerificationItems(extractedReport.tests || []);
 
     pat.reports.push(extractedReport);
     this.notify();
@@ -104,7 +110,7 @@ window.MedLensState = {
   getMergedRecord: function() {
     const pat = this.getActivePatient();
     if (!pat) return null;
-    return window.MedLensMergeEngine.createUnifiedRecord(pat.patient_info, pat.reports);
+    return window.MedLensMergeEngine.createUnifiedRecord(pat.patient_info, pat.reports || []);
   },
 
   getVerificationItems: function() {
@@ -112,7 +118,39 @@ window.MedLensState = {
     if (!pat || !pat.reports || pat.reports.length === 0) return [];
     // Get latest report
     const latestRep = pat.reports[pat.reports.length - 1];
-    return window.MedLensVerificationEngine.initVerificationItems(latestRep.tests || []);
+    if (!latestRep.verification_items || latestRep.verification_items.length === 0) {
+      latestRep.verification_items = window.MedLensVerificationEngine.initVerificationItems(latestRep.tests || []);
+    }
+    return latestRep.verification_items;
+  },
+
+  applyVerificationAction: function(itemId, action, edits = {}) {
+    const verifItems = this.getVerificationItems();
+    const item = verifItems.find(i => i.id === itemId);
+    if (item) {
+      window.MedLensVerificationEngine.applyAction(item, action, edits);
+      
+      // Update the extracted test value in report tests if corrected
+      if (action === 'correct' && edits.corrected_value != null) {
+        const pat = this.getActivePatient();
+        const latestRep = pat?.reports?.[pat.reports.length - 1];
+        if (latestRep) {
+          const test = (latestRep.tests || []).find(t => t.test_name === item.test_name);
+          if (test) {
+            test.value = edits.corrected_value;
+            // Recalculate interpretation if range exists
+            if (test.reference_range && test.reference_range.high) {
+              if (test.value > test.reference_range.high) test.interpretation = 'high';
+              else if (test.value < test.reference_range.low) test.interpretation = 'low';
+              else test.interpretation = 'normal';
+            }
+          }
+        }
+      }
+
+      this.notify();
+    }
+    return item;
   },
 
   getComparisonData: function() {
@@ -130,7 +168,7 @@ window.MedLensState = {
     const pat = this.getActivePatient();
     if (!pat) return null;
     const merged = this.getMergedRecord();
-    return window.MedLensSummaryEngine.generateSummary(pat.patient_info, pat.reports, merged);
+    return window.MedLensSummaryEngine.generateSummary(pat.patient_info, pat.reports || [], merged);
   },
 
   resetToSampleData: function() {
